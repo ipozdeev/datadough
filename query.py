@@ -55,6 +55,20 @@ class TableQuery(object):
 
         return TableQuery(condition=new_expression)
 
+    # @classmethod
+    # def by_id(cls, idx):
+    #     """
+    #
+    #     Parameters
+    #     ----------
+    #     idx
+    #
+    #     Returns
+    #     -------
+    #
+    #     """
+    #     if len(idx) < 3:
+    #         expr = self.key + "_id" + "in {}".format(tuple(idx))
 
 if __name__ == "__main__":
     qry_1 = TableQuery("data_object == 'ois_1m_eur'").and_(

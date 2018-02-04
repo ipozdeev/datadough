@@ -2,7 +2,7 @@ import pandas as pd
 
 
 class DataHangar(object):
-    """docstring for DataHangar.
+    """Implement context managers for a bunch of pandas.HDFStore methods.
 
     Parameters
     ----------
@@ -15,44 +15,38 @@ class DataHangar(object):
         """
         self.path_to_hdf = path_to_hdf
 
-    # @property
-    # def hangar_read(self):
-    #     with pd.HDFStore(self.path_to_hdf, mode='r') as h:
-    #         return h
-
-    def read_do(self, action):
-        """Perform an action on a read-only open HDFStore.
-
-        TODO: change to a decorator!
+    def select_column(self, *args, **kwargs):
+        """Wrapper for pandas.HDFStore.get.select_column.
 
         Parameters
         ----------
-        action : callable
-            operating on an open pandas.HDFStore instance
-
-        Example
-        -------
-        hangar = DataHangar(...)
-        one_row = hangar.read_do(lambda x: x.select('df', 'index == 5'))
+        args
+        kwargs
 
         Returns
         -------
-        res : any
+        res
 
         """
         with pd.HDFStore(self.path_to_hdf, mode='r') as h:
-            res = action(h)
+            res = h.select_column(*args, **kwargs)
 
         return res
 
-    def select(self, **kwargs):
-        """
+    def get(self, *args, **kwargs):
+        """Wrapper for pandas.HDFStore.get.
         """
         with pd.HDFStore(self.path_to_hdf, mode='r') as h:
-            return h.select(**kwargs)
+            return h.get(*args, **kwargs)
 
-    def append(self, **kwargs):
+    def select(self, *args, **kwargs):
+        """Wrapper for pandas.HDFStore.select.
         """
+        with pd.HDFStore(self.path_to_hdf, mode='r') as h:
+            return h.select(*args, **kwargs)
+
+    def append(self, *args, **kwargs):
+        """Wrapper for pandas.HDFStore.append.
         """
         with pd.HDFStore(self.path_to_hdf, mode='a') as h:
-            return h.append(**kwargs)
+            return h.append(*args, **kwargs)
