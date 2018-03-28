@@ -49,11 +49,17 @@ def create_example_database():
         }
     )
 
-    # data header -----------------------------------------------------------
-    data_header = pd.DataFrame(
+    # concept header --------------------------------------------------------
+    concept_header = pd.DataFrame(
         columns=["data_object_id", "data_type_id", "data_provider_id",
-                 "currency_id", "data_version_id"],
+                 "currency_id"],
         data=np.array([[0, 0, 0, 0, 0]])
+    )
+
+    # data header -----------------------------------------------------------
+    ts_header = pd.DataFrame(
+        columns=["concept_header_id", "data_version_id"],
+        data=np.array([[0, 0]])
     )
 
     # timeseries ------------------------------------------------------------
@@ -72,7 +78,11 @@ def create_example_database():
                    data_columns=True)
         hangar.put("currency", currency, format='t', data_columns=True)
         hangar.put("data_version", data_version, format='t', data_columns=True)
-        hangar.put("data_header", data_header, format='t', data_columns=True)
+        hangar.put("concept_header", concept_header, format='t',
+                   data_columns=True)
+        hangar.put("ts_header", ts_header, format='t',
+                   data_columns=True)
+
         hangar.put("timeseries", timeseries, format='t', data_columns=True)
 
         # attributes --------------------------------------------------------
@@ -113,6 +123,26 @@ def create_example_database():
 
         # for k in hangar.keys():
         #     hangar.create_table_index(k, columns=hangar, kind="full")
+
+
+def upload_rows():
+    """
+
+    Returns
+    -------
+
+    """
+    curs = ["aud", "nzd", "chf"]
+    d_obj = {"long_name": ["1-month {} ois".format(c) for c in curs],
+             "short_name": ["ois_1m_{}".format(c) for c in curs]}
+
+    # currency --------------------------------------------------------------
+    currency = {"long_name": ["australian dollar", "new zealand dollar",
+                              "swiss franc"],
+                "iso": curs}
+
+    # add new objects
+    DataObject().add_new(pd.DataFrame(dobj))
 
 
 def seed_timeseries():

@@ -70,6 +70,7 @@ class TableQuery(object):
     #     if len(idx) < 3:
     #         expr = self.key + "_id" + "in {}".format(tuple(idx))
 
+
 if __name__ == "__main__":
     qry_1 = TableQuery("data_object == 'ois_1m_eur'").and_(
         TableQuery("data_type == 'interest_rate'"))

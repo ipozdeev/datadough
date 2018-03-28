@@ -3,7 +3,7 @@ import numpy as np
 from datadough.query import TableQuery
 from datadough.hangar import DataHangar
 
-hangar = DataHangar("c:/temp/temp_hdf.h5")
+hangar = DataHangar("c:/temp/test_hdf.h5")
 
 
 class DataBase(object):
@@ -16,6 +16,8 @@ class DataBase(object):
         self._data_provider = DataProvider()
         self._currency = Currency()
         self._data_version = DataVersion()
+        self._tsheader = TSHeader()
+        self._conceptheader = ConceptHeader()
 
         self._timeseries = Timeseries()
 
@@ -40,9 +42,9 @@ class DataBase(object):
         if isinstance(header, pd.Series):
             dh = header.copy()
         else:
-            dh = ConceptHeader().get_id(header)
+            dh = self._tsheader.get_id(header)
 
-        data = Timeseries().get_data(header, date_from, date_to)
+        data = self._timeseries.get_data(dh, date_from, date_to)
 
         # implement freq
         data = data.resample(freq).last()
@@ -68,7 +70,7 @@ class DataBase(object):
         if not isinstance(df.columns, pd.MultiIndex):
             cols = df.columns
         else:
-            cols = ConceptHeader().get_id(df.columns, create=True)
+            cols = self._conceptheader.get_id(df.columns, create=True)
 
         df.columns = cols
 
@@ -157,7 +159,7 @@ class Table(object):
 
         Returns
         -------
-        res : pandas.Series
+        res : pandas.DataFrame
             row(s) meeting the criterion
         """
         # TODO integrate pandas.HDFStore start, stop things?
@@ -175,6 +177,11 @@ class Table(object):
         ----------
         query : TableQuery
 
+        Returns
+        -------
+        float
+            id of the row
+
         """
         # first, get all
         res = self.filter(query)
@@ -187,7 +194,7 @@ class Table(object):
         else:
             return res.index[0]
 
-    def add_rows(self, new):
+    def add_new(self, new):
         """
         Parameters
         ----------
@@ -226,7 +233,7 @@ class Table(object):
         # append
         hangar.append(self.key, df_to_save)
 
-        return
+        return list(unq_idx)
 
     def rows_in_db(self, rows):
         """
@@ -258,7 +265,7 @@ class Table(object):
         return res
 
     def construct_query_by_id(self, idx):
-        """
+        """Construct valid query to another table with this table's name.
 
         Parameters
         ----------
@@ -349,7 +356,8 @@ class DataVersion(Table):
         """
         """
         schema = {
-            "required_columns": ("header_id", "date_created", "description"),
+            "required_columns": ("concept_header_id", "date_created",
+                                 "description"),
             "default_column": "description"
         }
 
@@ -359,25 +367,43 @@ class DataVersion(Table):
             query=TableQuery("description == 'default'")
         )
 
-    def add_new(self, new=None):
-        """Convenience function able to generate new DataVersions on the fly.
+    def add_quick(self, concept_header_id):
+        """
 
         Parameters
         ----------
-        new :
+        concept_header_id : float
 
         Returns
         -------
-        None
 
         """
-        if new is None:
-            new = pd.Series({"date_created": pd.Timestamp.today,
-                             "description": "randomly generated version"})
+        new = pd.Series({"concept_header_id": concept_header_id,
+                         "date_created": pd.Timestamp.today,
+                         "description": "automatically generated version"})
 
-        super(DataVersion, self).add_rows(new)
+        self.add_new(new)
 
         return
+
+    def get_default(self, concept_header_id):
+        """
+
+        Parameters
+        ----------
+        concept_header_id
+
+        Returns
+        -------
+
+        """
+        # query (leave 'date_added' empty)
+        query = TableQuery({"concept_header_id": concept_header_id,
+                            "description": "default"})
+
+        res = self.get_unique_id(query)
+
+        return res
 
     def get_newest(self, header_id):
         """
@@ -431,7 +457,7 @@ class ConceptHeader(Table):
 
         # add a new entry if asked
         if create:
-            self.add_rows(info_int)
+            self.add_new(info_int)
 
         # call to db
         query = TableQuery(info_int)
@@ -514,16 +540,53 @@ class TSHeader(Table):
         """
         """
         schema = {
-            "required_columns": ("header_id", "data_version_id"),
-            "default_column": "header_id"
+            "required_columns": ("concept_header_id", "data_version_id"),
+            "default_column": "concept_header_id"
         }
 
         super(TSHeader, self).__init__(key="ts_header", schema=schema)
 
-        # # add revision if missing
-        # # TODO: add this default_version!
-        # if "data_version" not in info_series_int.index:
-        #     info_series_int.loc["version"] = DataVersion().default_version
+    def add_new(self, new):
+        """
+
+        Parameters
+        ----------
+        new : pandas.DataFrame
+            with rows
+
+        Returns
+        -------
+
+        """
+        # add a new data_version if not specified
+        if new.get("data_version_id", None):
+            new.loc[:, "data_version_id"] = np.nan
+
+        # add data versions if needed
+        for t, row in new.dropna(subset=["data_version_id"]).iterrows():
+            new.loc[t, "data_version_id"] = \
+                DataVersion().add_quick(row.loc["concept_header_id"])[0]
+
+        # add rows thorough super
+        super(TSHeader, self).add_new(new)
+
+    def get_id(self, info, create=False):
+        """Fetch integer ts header ids based on query in `info`.
+
+        Parameters
+        ----------
+        info : pandas.Series, pandas.DataFrame or dict
+        create : bool
+            True to create a Header if not found
+
+        Returns
+        -------
+        res : int or pandas.Series
+
+        """
+        # to ndframe
+        info_ndframe = self._coerce_to_ndframe(info)
+
 
 
 class Timeseries(Table):
@@ -548,8 +611,8 @@ class Timeseries(Table):
     def get_data(self, header, date_from=None, date_to=None):
         """Load data based on header and dates."""
         cond_header = "index == {}".format(list(header.values))
-        cond_date = ("obs_date > Timestamp('{}') and " +
-                     "obs_date < Timestamp('{}')").format(date_from, date_to)
+        cond_date = ("obs_date >= Timestamp('{}') and " +
+                     "obs_date <= Timestamp('{}')").format(date_from, date_to)
 
         query = TableQuery(cond_header).and_(TableQuery(cond_date))
 
